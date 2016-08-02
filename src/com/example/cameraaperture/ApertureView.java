@@ -1,6 +1,8 @@
 package com.example.cameraaperture;
 
+import android.R.integer;
 import android.content.Context;
+import android.content.res.TypedArray;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.Config;
 import android.graphics.Canvas;
@@ -10,14 +12,14 @@ import android.graphics.Point;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.MotionEvent;
-import android.view.ScaleGestureDetector;
 import android.view.View;
 
 /**
- * 手指竖直滑动可以调节光圈大小；
+ * 上下滑动可以调节光圈大小；
  * 调用setApertureChangedListener设置光圈值变动监听接口；
+ * 绘制的光圈最大直径将填满整个view
  * @author willhua
- *
+ * 
  */
 public class ApertureView extends View {
 
@@ -25,11 +27,14 @@ public class ApertureView extends View {
         public void onApertureChanged(float newapert);
     }
 
+    private static final String TAG = "ApertureView";
     private static final float COS_30 = 0.866025f;
-    private int mCircleRadius = 250;
-    private int mBladeColor = 0xFF123456;
-    private int mBackgroundColor = 0xFF789456;
-    private int mSpace = 20;
+    private static final int WIDTH = 100; // 当设置为wrap_content时测量大小
+    private static final int HEIGHT = 100;
+    private int mCircleRadius;
+    private int mBladeColor;
+    private int mBackgroundColor;
+    private int mSpace;
     private float mMaxApert = 1;
     private float mMinApert = 0.2f;
     private float mCurrentApert = 0.5f;
@@ -40,51 +45,69 @@ public class ApertureView extends View {
     private Path mPath;
     private ApertureChanged mApertureChanged;
 
-    private ScaleGestureDetector mScaleGestureDetector;
     private float mPrevX;
     private float mPrevY;
 
     public ApertureView(Context context, AttributeSet attrs) {
         super(context, attrs);
+        TypedArray array = context.obtainStyledAttributes(attrs, R.styleable.ApertureView);
+        mSpace = (int)array.getDimension(R.styleable.ApertureView_blade_space, 5);
+        mBladeColor = array.getColor(R.styleable.ApertureView_blade_color, 0xFF000000);
+        mBackgroundColor = array.getColor(R.styleable.ApertureView_background_color, 0xFFFFFFFF);
+        array.recycle();
+        Log.d("lyh", " init ");
+
         init();
     }
 
     private void init() {
         mPaint = new Paint();
         mPaint.setAntiAlias(true);
-        mPath = new Path();
-        mPath.addCircle(0, 0, mCircleRadius, Path.Direction.CW);
         for (int i = 0; i < 6; i++) {
             mPoints[i] = new Point();
         }
+    }
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+        Log.d("lyh", " onMeasure ");
+        int widthSpecMode = MeasureSpec.getMode(widthMeasureSpec);
+        int heightSpecMode = MeasureSpec.getMode(heightMeasureSpec);
+        int widthSpecSize = MeasureSpec.getSize(widthMeasureSpec);
+        int heightSpecSize = MeasureSpec.getSize(heightMeasureSpec);
+        int paddX = getPaddingLeft() + getPaddingRight();
+        int paddY = getPaddingTop() + getPaddingBottom();
+        Log.d("lyh", paddX + " padd " + paddY);
+        mCircleRadius = widthSpecSize - paddX < heightSpecSize - paddY ? (widthSpecSize - paddX) / 2
+                : (heightSpecSize - paddY) / 2;
+        if (widthSpecMode == MeasureSpec.AT_MOST
+                && heightSpecMode == MeasureSpec.AT_MOST) {
+            setMeasuredDimension(WIDTH, HEIGHT);
+            mCircleRadius = (WIDTH - paddX) / 2;
+        } else if (widthSpecMode == MeasureSpec.AT_MOST) {
+            setMeasuredDimension(WIDTH, heightSpecSize);
+            mCircleRadius = WIDTH - paddX < heightSpecSize - paddY ? (WIDTH - paddX) / 2
+                    : (heightSpecSize - paddY) / 2;
+        } else if (heightSpecMode == MeasureSpec.AT_MOST) {
+            setMeasuredDimension(widthSpecSize, HEIGHT);
+            mCircleRadius = widthSpecSize - paddX < HEIGHT - paddY ? (widthSpecSize - paddX) / 2
+                    : (HEIGHT - paddY) / 2;
+        }
+        if (mCircleRadius < 1) {
+            mCircleRadius = 1;
+        }
+        mPath = new Path();
+        mPath.addCircle(0, 0, mCircleRadius, Path.Direction.CW);
         createBlade();
-        mScaleGestureDetector = new ScaleGestureDetector(getContext(),
-                new ScaleGestureDetector.OnScaleGestureListener() {
 
-                    @Override
-                    public void onScaleEnd(ScaleGestureDetector detector) {
-                        // TODO Auto-generated method stub
-                    }
-
-                    @Override
-                    public boolean onScaleBegin(ScaleGestureDetector detector) {
-                        // TODO Auto-generated method stub
-                        return true;
-                    }
-
-                    @Override
-                    public boolean onScale(ScaleGestureDetector detector) {
-                        // TODO Auto-generated method stub
-                        setCurrentApert(mCurrentApert
-                                * detector.getScaleFactor());
-                        Log.d("lyh", "onscale " + detector.getScaleFactor());
-                        return true;
-                    }
-                });
+        Log.d("lyh", mCircleRadius + " mCircleRadius ");
     }
 
     @Override
     public void onDraw(Canvas canvas) {
+        Log.d("lyh", " onDraw ");
+
         canvas.save();
         calculatePoints();
         canvas.translate(getWidth() / 2, getHeight() / 2);
@@ -103,7 +126,6 @@ public class ApertureView extends View {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-     //   mScaleGestureDetector.onTouchEvent(event);
         if (event.getPointerCount() > 1) {
             return false;
         }
@@ -113,11 +135,11 @@ public class ApertureView extends View {
             mPrevY = event.getY();
             break;
         case MotionEvent.ACTION_MOVE:
-            if (Math.abs((event.getX() - mPrevX)) < Math
-                    .abs((event.getY() - mPrevY))) {
-                float diff = (event.getX() - mPrevX) * (event.getX() - mPrevX)
-                        + (event.getY() - mPrevY) * (event.getY() - mPrevY);
-                diff = (float) Math.sqrt(diff) / mCircleRadius * mMaxApert;
+            float diffx = Math.abs((event.getX() - mPrevX));
+            float diffy = Math.abs((event.getY() - mPrevY));
+            if (diffy > diffx) {
+                float diff = (float) Math.sqrt(diffx * diffx + diffy * diffy)
+                        / mCircleRadius * mMaxApert;
                 if (event.getY() > mPrevY) {
                     setCurrentApert(mCurrentApert - diff);
                 } else {
@@ -134,6 +156,10 @@ public class ApertureView extends View {
     }
 
     private void calculatePoints() {
+        if (mCircleRadius - mSpace <= 0) {
+            Log.e(TAG, "the size of view is too small and Space is too large");
+            return;
+        }
         int curRadius = (int) (mCurrentApert / mMaxApert * (mCircleRadius - mSpace));
         mPoints[0].x = curRadius / 2;
         mPoints[0].y = -(int) (curRadius * COS_30);
@@ -162,26 +188,41 @@ public class ApertureView extends View {
         canvas.drawColor(mBladeColor);
     }
 
+    /**
+     * 设置光圈片的颜色
+     * @param bladeColor
+     */
     public void setBladeColor(int bladeColor) {
         mBladeColor = bladeColor;
     }
 
+    /**
+     * 设置光圈背景色
+     */
     public void setBackgroundColor(int backgroundColor) {
         mBackgroundColor = backgroundColor;
     }
-    
+
+    /**
+     * 设置光圈片之间的间隔
+     * @param space
+     */
     public void setSpace(int space) {
         mSpace = space;
     }
-    
-    public void setCircleRadius(int circleRadius) {
-        mCircleRadius = circleRadius;
-    }
 
+    /**
+     * 设置光圈最大值
+     * @param maxApert
+     */
     public void setMaxApert(float maxApert) {
         mMaxApert = maxApert;
     }
 
+    /**
+     * 设置光圈最小值
+     * @param mMinApert
+     */
     public void setMinApert(float mMinApert) {
         this.mMinApert = mMinApert;
     }
