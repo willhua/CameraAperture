@@ -100,14 +100,10 @@ public class ApertureView extends View {
         mPath = new Path();
         mPath.addCircle(0, 0, mCircleRadius, Path.Direction.CW);
         createBlade();
-
-        Log.d("lyh", mCircleRadius + " mCircleRadius ");
     }
 
     @Override
     public void onDraw(Canvas canvas) {
-        Log.d("lyh", " onDraw ");
-
         canvas.save();
         calculatePoints();
         canvas.translate(getWidth() / 2, getHeight() / 2);
