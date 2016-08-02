@@ -4,7 +4,6 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.Config;
 import android.graphics.Canvas;
-import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Point;
@@ -14,10 +13,16 @@ import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
 
+/**
+ * 手指竖直滑动可以调节光圈大小；
+ * 调用setApertureChangedListener设置光圈值变动监听接口；
+ * @author willhua
+ *
+ */
 public class ApertureView extends View {
 
     public interface ApertureChanged {
-        public void onApertureChanged(float apert);
+        public void onApertureChanged(float newapert);
     }
 
     private static final float COS_30 = 0.866025f;
@@ -26,21 +31,25 @@ public class ApertureView extends View {
     private int mBackgroundColor = 0xFF789456;
     private int mSpace = 20;
     private float mMaxApert = 1;
+    private float mMinApert = 0.2f;
     private float mCurrentApert = 0.5f;
 
     private Point[] mPoints = new Point[6];
     private Bitmap mBlade;
     private Paint mPaint;
-    private ApertureChanged mApertureChanged;
     private Path mPath;
+    private ApertureChanged mApertureChanged;
+
     private ScaleGestureDetector mScaleGestureDetector;
+    private float mPrevX;
+    private float mPrevY;
 
     public ApertureView(Context context, AttributeSet attrs) {
         super(context, attrs);
         init();
     }
-    
-    private void init(){
+
+    private void init() {
         mPaint = new Paint();
         mPaint.setAntiAlias(true);
         mPath = new Path();
@@ -49,27 +58,29 @@ public class ApertureView extends View {
             mPoints[i] = new Point();
         }
         createBlade();
-        mScaleGestureDetector = new ScaleGestureDetector(getContext(), new ScaleGestureDetector.OnScaleGestureListener() {
-            
-            @Override
-            public void onScaleEnd(ScaleGestureDetector detector) {
-                // TODO Auto-generated method stub
-            }
-            
-            @Override
-            public boolean onScaleBegin(ScaleGestureDetector detector) {
-                // TODO Auto-generated method stub
-                return true;
-            }
-            
-            @Override
-            public boolean onScale(ScaleGestureDetector detector) {
-                // TODO Auto-generated method stub
-                setCurrentApert(mCurrentApert * detector.getScaleFactor());
-                Log.d("lyh", "onscale " + detector.getScaleFactor());
-                return true;
-            }
-        });
+        mScaleGestureDetector = new ScaleGestureDetector(getContext(),
+                new ScaleGestureDetector.OnScaleGestureListener() {
+
+                    @Override
+                    public void onScaleEnd(ScaleGestureDetector detector) {
+                        // TODO Auto-generated method stub
+                    }
+
+                    @Override
+                    public boolean onScaleBegin(ScaleGestureDetector detector) {
+                        // TODO Auto-generated method stub
+                        return true;
+                    }
+
+                    @Override
+                    public boolean onScale(ScaleGestureDetector detector) {
+                        // TODO Auto-generated method stub
+                        setCurrentApert(mCurrentApert
+                                * detector.getScaleFactor());
+                        Log.d("lyh", "onscale " + detector.getScaleFactor());
+                        return true;
+                    }
+                });
     }
 
     @Override
@@ -89,12 +100,36 @@ public class ApertureView extends View {
         }
         canvas.restore();
     }
-    
-    @Override
-    public boolean onTouchEvent(MotionEvent event){
-        mScaleGestureDetector.onTouchEvent(event);
-        Log.d("lyh", "onscale2 " + mScaleGestureDetector.getScaleFactor());
 
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+     //   mScaleGestureDetector.onTouchEvent(event);
+        if (event.getPointerCount() > 1) {
+            return false;
+        }
+        switch (event.getAction()) {
+        case MotionEvent.ACTION_DOWN:
+            mPrevX = event.getX();
+            mPrevY = event.getY();
+            break;
+        case MotionEvent.ACTION_MOVE:
+            if (Math.abs((event.getX() - mPrevX)) < Math
+                    .abs((event.getY() - mPrevY))) {
+                float diff = (event.getX() - mPrevX) * (event.getX() - mPrevX)
+                        + (event.getY() - mPrevY) * (event.getY() - mPrevY);
+                diff = (float) Math.sqrt(diff) / mCircleRadius * mMaxApert;
+                if (event.getY() > mPrevY) {
+                    setCurrentApert(mCurrentApert - diff);
+                } else {
+                    setCurrentApert(mCurrentApert + diff);
+                }
+                mPrevX = event.getX();
+                mPrevY = event.getY();
+            }
+            break;
+        default:
+            break;
+        }
         return true;
     }
 
@@ -127,36 +162,28 @@ public class ApertureView extends View {
         canvas.drawColor(mBladeColor);
     }
 
-    public int getCircleRadius() {
-        return mCircleRadius;
-    }
-
-    public void setCircleRadius(int circleRadius) {
-        mCircleRadius = circleRadius;
-    }
-
-    public int getBladeColor() {
-        return mBladeColor;
-    }
-
     public void setBladeColor(int bladeColor) {
         mBladeColor = bladeColor;
     }
 
-    public int getSpace() {
-        return mSpace;
+    public void setBackgroundColor(int backgroundColor) {
+        mBackgroundColor = backgroundColor;
     }
-
+    
     public void setSpace(int space) {
         mSpace = space;
     }
-
-    public float getMaxApert() {
-        return mMaxApert;
+    
+    public void setCircleRadius(int circleRadius) {
+        mCircleRadius = circleRadius;
     }
 
     public void setMaxApert(float maxApert) {
         mMaxApert = maxApert;
+    }
+
+    public void setMinApert(float mMinApert) {
+        this.mMinApert = mMinApert;
     }
 
     public float getCurrentApert() {
@@ -164,28 +191,23 @@ public class ApertureView extends View {
     }
 
     public void setCurrentApert(float currentApert) {
-        if(currentApert > mMaxApert){
+        if (currentApert > mMaxApert) {
             currentApert = mMaxApert;
         }
-        if(currentApert < 0){
-            currentApert = 0;
+        if (currentApert < mMinApert) {
+            currentApert = mMinApert;
+        }
+        if (mCurrentApert == currentApert) {
+            return;
         }
         mCurrentApert = currentApert;
         invalidate();
-        if(mApertureChanged != null){
+        if (mApertureChanged != null) {
             mApertureChanged.onApertureChanged(currentApert);
         }
     }
 
-    public int getBackgroundColor() {
-        return mBackgroundColor;
-    }
-
-    public void setBackgroundColor(int backgroundColor) {
-        mBackgroundColor = backgroundColor;
-    }
-    
-    public void setApertureChangedListener(ApertureChanged listener){
+    public void setApertureChangedListener(ApertureChanged listener) {
         mApertureChanged = listener;
     }
 
