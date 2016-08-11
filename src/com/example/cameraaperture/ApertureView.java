@@ -9,6 +9,7 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Point;
+import android.graphics.PointF;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -18,7 +19,7 @@ import android.view.View;
  * 上下滑动可以调节光圈大小；
  * 调用setApertureChangedListener设置光圈值变动监听接口；
  * 绘制的光圈最大直径将填满整个view
- * @author willhua
+ * @author willhua http://www.cnblogs.com/willhua/
  * 
  */
 public class ApertureView extends View {
@@ -27,6 +28,7 @@ public class ApertureView extends View {
         public void onApertureChanged(float newapert);
     }
 
+    private static final float ROTATE_ANGLE = 30;
     private static final String TAG = "ApertureView";
     private static final float COS_30 = 0.866025f;
     private static final int WIDTH = 100; // 当设置为wrap_content时测量大小
@@ -39,7 +41,7 @@ public class ApertureView extends View {
     private float mMinApert = 0.2f;
     private float mCurrentApert = 0.5f;
 
-    private Point[] mPoints = new Point[6];
+    private PointF[] mPoints = new PointF[6];
     private Bitmap mBlade;
     private Paint mPaint;
     private Path mPath;
@@ -61,24 +63,22 @@ public class ApertureView extends View {
     }
 
     private void init() {
-        mPaint = new Paint();
+        mPaint = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.DITHER_FLAG);
         mPaint.setAntiAlias(true);
         for (int i = 0; i < 6; i++) {
-            mPoints[i] = new Point();
+            mPoints[i] = new PointF();
         }
     }
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-        Log.d("lyh", " onMeasure ");
         int widthSpecMode = MeasureSpec.getMode(widthMeasureSpec);
         int heightSpecMode = MeasureSpec.getMode(heightMeasureSpec);
         int widthSpecSize = MeasureSpec.getSize(widthMeasureSpec);
         int heightSpecSize = MeasureSpec.getSize(heightMeasureSpec);
         int paddX = getPaddingLeft() + getPaddingRight();
         int paddY = getPaddingTop() + getPaddingBottom();
-        Log.d("lyh", paddX + " padd " + paddY);
         mCircleRadius = widthSpecSize - paddX < heightSpecSize - paddY ? (widthSpecSize - paddX) / 2
                 : (heightSpecSize - paddY) / 2;
         if (widthSpecMode == MeasureSpec.AT_MOST
@@ -107,6 +107,7 @@ public class ApertureView extends View {
         canvas.save();
         calculatePoints();
         canvas.translate(getWidth() / 2, getHeight() / 2);
+        canvas.rotate(ROTATE_ANGLE * (mCurrentApert - mMinApert) / (mMaxApert - mMinApert));
         canvas.clipPath(mPath);
         canvas.drawColor(mBackgroundColor);
 
@@ -156,9 +157,9 @@ public class ApertureView extends View {
             Log.e(TAG, "the size of view is too small and Space is too large");
             return;
         }
-        int curRadius = (int) (mCurrentApert / mMaxApert * (mCircleRadius - mSpace));
+        float curRadius = mCurrentApert / mMaxApert * (mCircleRadius - mSpace);
         mPoints[0].x = curRadius / 2;
-        mPoints[0].y = -(int) (curRadius * COS_30);
+        mPoints[0].y = -curRadius * COS_30;
         mPoints[1].x = -mPoints[0].x;
         mPoints[1].y = mPoints[0].y;
         mPoints[2].x = -curRadius;
